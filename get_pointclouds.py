@@ -13,17 +13,19 @@ centerX = 319.5
 centerY = 239.5
 
 def construct_graph(cloud_dict):
-    num_cluster = len(cloud_dict.keys())
-    graph = [[0.0 for i in range(num_cluster)] for j in range(num_cluster)]
-    centers = []
-    for idx in range(num_cluster):
+    
+    graph = {}
+    centers = {}
+    for idx in cloud_dict:
         cluster = cloud_dict[idx]
         centroid = np.mean(cluster["xyz_arr"],axis=0)
-        centers.append(centroid)
-    centers = np.array(centers)
-    for i in range(num_cluster):
-        for j in range(num_cluster):
-            graph[i][j] = np.sum((centers[i]-centers[j])**2)
+        centers[idx] = centroid
+    
+    for i in cloud_dict:
+        graph[i] = {}
+        for j in cloud_dict:
+            if i!=j:
+                graph[i][j] = np.sum((centers[i]-centers[j])**2)
     return graph
  
 
@@ -49,14 +51,16 @@ def get_clustered_point_cloud(rgb_im,depth_im):
                         "color_arr":[], "xyz_arr":[],"des_arr":[]}
         cloud_dict[i] = cluster_dict
 
+    assign = [-1 for i in range(len(kp))]
     for i in range(len(kp)):
         x, y = int(kp[i].pt[0]), int(kp[i].pt[1])
-        labels = []
+        label = None
         for j in range(len(pred_masks)):
             if pred_masks[j,y,x] == True:
-                labels.append(j)
+                label = j
+                break
  
-        if len(labels) == 0:
+        if label == None:
             continue
         color = rgb_im[y,x]
         Z = depth_im[y,x] / scalingFactor
@@ -64,10 +68,11 @@ def get_clustered_point_cloud(rgb_im,depth_im):
             continue
         X = (x - centerX) * Z / focalLength
         Y = (y - centerY) * Z / focalLength
-        for l in labels:
-            cloud_dict[l]["color_arr"].append([color[0],color[1],color[2]])
-            cloud_dict[l]["xyz_arr"].append([X,Y,Z])
-            cloud_dict[l]["des_arr"].append(des[i])
+       
+        cloud_dict[label]["color_arr"].append([color[0],color[1],color[2]])
+        cloud_dict[label]["xyz_arr"].append([X,Y,Z])
+        cloud_dict[label]["des_arr"].append(des[i])
+        assign[i] = label
 
     delete_arr = []   
     for i in cloud_dict:
@@ -75,13 +80,13 @@ def get_clustered_point_cloud(rgb_im,depth_im):
         print(i,orb_num)
         if orb_num < 10:
             delete_arr.append(i)
-    cnt = 0
-    res_dict = {}
-    for i in cloud_dict:
-        if i not in delete_arr:
-            res_dict[cnt] = cloud_dict[i]
-            cnt += 1
-    return res_dict
+    print("delete:",delete_arr)
+    for i in delete_arr:
+        del cloud_dict[i]
+
+    orb_dict = {"kp":kp, "des":des, "assign":assign}
+    
+    return cloud_dict, orb_dict
     
 
 
