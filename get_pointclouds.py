@@ -100,6 +100,7 @@ if __name__ == "__main__":
   
     for i in range(1):
         rgb = data_dir + rgb_list[asso_list[i][0]][0]
+        print(rgb)
         depth = data_dir + depth_list[asso_list[i][1]][0]
         rgb_im = Image.open(rgb)
         depth_im = Image.open(depth)

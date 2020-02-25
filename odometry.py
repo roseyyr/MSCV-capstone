@@ -43,10 +43,6 @@ def calculate_odometry(ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     print(res)
 
 
-            
-
-
-
 if __name__ == "__main__":
     data_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg1_xyz/"
     depth_path = data_dir + "depth.txt"
