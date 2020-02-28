@@ -48,30 +48,32 @@ def get_clustered_point_cloud(rgb_im,depth_im):
     for i in range(pred_boxes.shape[0]):
         mask = pred_masks[i]
         cluster_dict = {"score":scores[i].item(), "pred_class":pred_classes[i].item(),"pred_box":pred_boxes[i],\
-                        "color_arr":[], "xyz_arr":[],"des_arr":[]}
+                        "color_arr":[], "xyz_arr":[],"des_arr":[],"uv_arr":[],"kp_arr":[]}
         cloud_dict[i] = cluster_dict
 
     assign = [-1 for i in range(len(kp))]
     for i in range(len(kp)):
-        x, y = int(kp[i].pt[0]), int(kp[i].pt[1])
+        v, u = int(kp[i].pt[0]), int(kp[i].pt[1])
         label = None
         for j in range(len(pred_masks)):
-            if pred_masks[j,y,x] == True:
+            if pred_masks[j,u,v] == True:
                 label = j
                 break
  
         if label == None:
             continue
-        color = rgb_im[y,x]
-        Z = depth_im[y,x] / scalingFactor
+        color = rgb_im[u,v]
+        Z = depth_im[u,v] / scalingFactor
         if Z==0: 
             continue
-        X = (x - centerX) * Z / focalLength
-        Y = (y - centerY) * Z / focalLength
+        X = (u - centerX) * Z / focalLength
+        Y = (v - centerY) * Z / focalLength
        
         cloud_dict[label]["color_arr"].append([color[0],color[1],color[2]])
         cloud_dict[label]["xyz_arr"].append([X,Y,Z])
         cloud_dict[label]["des_arr"].append(des[i])
+        cloud_dict[label]["uv_arr"].append([u,v])
+        cloud_dict[label]["kp_arr"].append(kp[i])
         assign[i] = label
 
     delete_arr = []   

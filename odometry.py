@@ -5,8 +5,11 @@ sys.path.append("./tools")
 from associate import associate, read_file_list
 from PIL import Image
 import cv2
-def calculate_odometry(ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
-    reg_im, depth_im = rgbd
+import matplotlib.pyplot as plt
+import open3d as o3d
+
+def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
+    rgb_im, depth_im = rgbd
     cloud_dict,orb_dict = get_clustered_point_cloud(np.array(rgb_im),np.array(depth_im))
     graph = construct_graph(cloud_dict)
     
@@ -14,7 +17,7 @@ def calculate_odometry(ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     match_dict = {}
     kp1, des1, assign1 = ref_orb_dict["kp"], ref_orb_dict["des"], ref_orb_dict['assign']
     kp2, des2, assign2 = orb_dict["kp"], orb_dict["des"],orb_dict['assign']
-    
+   
     # BFMatcher with default params
     bf = cv2.BFMatcher(cv2.NORM_HAMMING,crossCheck=True)
     matches = bf.match(des1,des2)
@@ -33,7 +36,8 @@ def calculate_odometry(ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     print(match_dict)
     res = {}
     s1, s2 = set(),set()
-    for match_str,votes in sorted(match_dict.items(),key=lambda x:x[1]):
+
+    for match_str,votes in sorted(match_dict.items(),key=lambda x:-x[1]):
         arr = match_str.split("-")
         idx1, idx2 = int(arr[0]), int(arr[1])
         if votes>=10 and idx1 not in s1 and idx2 not in s2:
@@ -41,6 +45,35 @@ def calculate_odometry(ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
             s1.add(idx1)
             s2.add(idx2)
     print(res)
+
+    RTs = []
+    K = cv2.UMat(np.array([[525.0,0.0,319.5],[0.0,525.0,239.5],[0.0,0.0,1.0]],dtype=np.float32))
+    for o_idx1, o_idx2 in res.items():
+        print(o_idx1, o_idx2)
+        des1, des2 = ref_cloud_dict[o_idx1]['des_arr'], cloud_dict[o_idx2]['des_arr']
+        des1, des2 = cv2.UMat(np.array(des1,dtype=np.uint8)), cv2.UMat(np.array(des2,dtype=np.uint8))
+        tmp_matches = bf.match(des1, des2)
+        kp1, kp2 = ref_cloud_dict[o_idx1]['kp_arr'], cloud_dict[o_idx2]['kp_arr']
+        tmp_matches = sorted(tmp_matches, key=lambda x:x.distance)
+        num = min(50, len(tmp_matches))
+        # im3 = cv2.drawMatches(cv2.UMat(np.array(im1)),kp1,cv2.UMat(np.array(im2)),kp2,tmp_matches[:num],outImg=None)  
+        # plt.imshow(im3.get())
+        # plt.savefig(str(o_idx1)+"-"+str(o_idx2)+".jpg")
+        # plt.show()
+        xyz_arr, uv_arr = [], []
+        for i in range(num):
+            m = tmp_matches[i]
+            f_idx1, f_idx2 = m.queryIdx, m.trainIdx
+            print(ref_cloud_dict[o_idx1]['xyz_arr'][f_idx1])
+            print(ref_cloud_dict[o_idx1]['uv_arr'][f_idx1])
+            print(cloud_dict[o_idx2]['uv_arr'][f_idx2])
+            xyz_arr.append(cloud_dict[o_idx2]['xyz_arr'][f_idx2])
+            uv_arr.append(cloud_dict[o_idx2]['uv_arr'][f_idx2])
+        print('number of matches:', np.array(xyz_arr).shape[0])
+        xyz_arr, uv_arr = cv2.UMat(np.array(xyz_arr,dtype=np.float32)), cv2.UMat(np.array(uv_arr,dtype=np.float32))
+        retval, rvec, tvec = cv2.solvePnP(xyz_arr,uv_arr,K,None) 
+        print("rotation:",rvec.get())
+        print("translation",tvec.get())
 
 
 if __name__ == "__main__":
@@ -52,17 +85,17 @@ if __name__ == "__main__":
     asso_list = associate(rgb_list, depth_list,offset=0.0,max_difference=0.02)
 
     
-    rgb = data_dir + rgb_list[asso_list[0][0]][0]
-    depth = data_dir + depth_list[asso_list[0][1]][0]
-    rgb_im = Image.open(rgb)
-    depth_im = Image.open(depth)
-    ref_cloud_dict, ref_orb_dict = get_clustered_point_cloud(np.array(rgb_im),np.array(depth_im))
+    rgb1 = data_dir + rgb_list[asso_list[0][0]][0]
+    depth1 = data_dir + depth_list[asso_list[0][1]][0]
+    rgb_im1 = Image.open(rgb1)
+    depth_im1 = Image.open(depth1)
+    ref_cloud_dict, ref_orb_dict = get_clustered_point_cloud(np.array(rgb_im1),np.array(depth_im1))
     graph = construct_graph(ref_cloud_dict)
 
-    rgb = data_dir + rgb_list[asso_list[1][0]][0]
-    depth = data_dir + depth_list[asso_list[1][1]][0]
-    rgb_im = Image.open(rgb)
-    depth_im = Image.open(depth)
-    calculate_odometry(graph,ref_cloud_dict,ref_orb_dict,(rgb_im,depth_im))
+    rgb2 = data_dir + rgb_list[asso_list[1][0]][0]
+    depth2 = data_dir + depth_list[asso_list[1][1]][0]
+    rgb_im2 = Image.open(rgb2)
+    depth_im2 = Image.open(depth2)
+    calculate_odometry(rgb_im1, rgb_im2, graph,ref_cloud_dict,ref_orb_dict,(rgb_im2,depth_im2))
 
 

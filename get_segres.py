@@ -22,14 +22,16 @@ cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
 # Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
 cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")
 predictor = DefaultPredictor(cfg)
+cnt = 0
 
 def get_segres(img):
-
+    global cnt
     outputs = predictor(img)
     # v = Visualizer(img[:, :, ::-1], MetadataCatalog.get(cfg.DATASETS.TRAIN[0]), scale=1.2)
     # v = v.draw_instance_predictions(outputs["instances"].to("cpu"))   
     # plt.imshow(v.get_image()[:,:,::-1])
-    # plt.savefig("seg_res.jpg")
+    # plt.savefig("seg_res"+str(cnt)+".jpg")
+    # cnt += 1
     outputs = outputs["instances"]
     return outputs.pred_boxes.tensor.cpu().numpy(), outputs.pred_classes.cpu().numpy(), outputs.scores.cpu().numpy(), outputs.pred_masks.cpu().numpy()
 
