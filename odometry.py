@@ -6,8 +6,49 @@ from associate import associate, read_file_list
 from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
-
+import random
+from scipy.spatial.transform import Rotation as R
 min_votes = 10
+max_iter = 100
+trans_threshold = 0.01
+rot_threshold = 0.01
+
+def rotation_ransac(l):
+    res = None
+    max_per = 0.0
+    for i in range(max_iter):
+        element = l[random.randint(0,len(l)-1)]
+        new_l = l - element
+        inliers = np.sum(new_l**2, axis=1).reshape(-1,) < rot_threshold
+        if len(inliers)/len(l) > max_per:
+            idx = np.nonzero(inliers)[0]
+            element = np.mean(l[idx], axis=0)
+            res = element
+            new_l = l-element
+            inliers = np.sum(new_l**2, axis=1) < rot_threshold
+            max_per = len(inliers)/len(l)
+    print('r_ransac:',res,'max percentage:',max_per)
+    return res
+
+
+def trans_ransac(l):
+    res = None
+    max_per = 0.0
+    for i in range(max_iter):
+        element = l[random.randint(0,len(l)-1)]
+        new_l = l - element
+        inliers = np.sum(new_l**2, axis=1).reshape(-1,) < trans_threshold
+        if len(inliers)/len(l) > max_per:
+            idx = np.nonzero(inliers)[0]
+            element = np.mean(l[idx], axis=0)
+            res = element 
+            new_l = l - element
+            inliers = np.sum(new_l**2, axis=1) < trans_threshold
+            max_per = len(inliers)/len(l)
+    print('t_ransac res:',res,'max percentage:', max_per)
+    return res
+              
+        
 
 def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     rgb_im, depth_im = rgbd
@@ -47,7 +88,7 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
             s2.add(idx2)
     print(res)
 
-    RTs = []
+    Rs, Ts = [], []
     K = cv2.UMat(np.array([[525.0,0.0,319.5],[0.0,525.0,239.5],[0.0,0.0,1.0]],dtype=np.float32))
     for o_idx1, o_idx2 in res.items():
         print(o_idx1, o_idx2)
@@ -71,17 +112,17 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
         xyz_arr, uv_arr = cv2.UMat(np.array(xyz_arr,dtype=np.float32)), cv2.UMat(np.array(uv_arr,dtype=np.float32))
         rvec, tvec = cv2.UMat(np.array([0.0,0.0,0.0])), cv2.UMat(np.array([0.0,0.0,0.0]))
         flag, rvec, tvec, inliers = cv2.solvePnPRansac(xyz_arr,uv_arr,K,None,rvec,tvec,True)
-        # pcd1 = o3d.geometry.PointCloud()
-        # pcd1.points = o3d.utility.Vector3dVector(xyz_arr1)
-        # pcd2 = o3d.geometry.PointCloud()
-        # pcd2.points = o3d.utility.Vector3dVector(xyz_arr2) 
-        # trans_init = np.array([[1.0,0.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,0.0,0.0,1.0]])
-        # evaluation = o3d.registration.evaluate_registration(pcd1, pcd2, 0.1, trans_init)
-        # reg_p2p = o3d.registration.registration_icp(pcd1, pcd2, 0.1, trans_init, o3d.registration.TransformationEstimationPointToPoint())
-        # print(reg_p2p.transformation)
         print('rotation:',rvec.get())
         print('translation:',tvec.get())
         print("number of inliers:",len(inliers.get()))
+        Rs.append(rvec.get())
+        Ts.append(tvec.get())
+    RMs = []
+    for rvec in Rs:
+        r = R.from_rotvec(rvec.reshape(3,))
+        RMs.append(r.as_euler('xyz'))
+    R_res = rotation_ransac(np.array(RMs))
+    t_res = trans_ransac(np.array(Ts))
 
 
 if __name__ == "__main__":
@@ -91,7 +132,6 @@ if __name__ == "__main__":
     depth_list = read_file_list(depth_path)
     rgb_list = read_file_list(rgb_path)
     asso_list = associate(rgb_list, depth_list,offset=0.0,max_difference=0.02)
-    print(asso_list)
 
     
     rgb1 = data_dir + rgb_list[asso_list[0][0]][0]
