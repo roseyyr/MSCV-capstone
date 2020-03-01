@@ -11,6 +11,8 @@ scalingFactor = 5000.0
 focalLength = 525.0
 centerX = 319.5
 centerY = 239.5
+min_orb = 10
+
 
 def construct_graph(cloud_dict):
     
@@ -80,7 +82,7 @@ def get_clustered_point_cloud(rgb_im,depth_im):
     for i in cloud_dict:
         orb_num = len(cloud_dict[i]["color_arr"])
         print(i,orb_num)
-        if orb_num < 10:
+        if orb_num < min_orb:
             delete_arr.append(i)
     print("delete:",delete_arr)
     for i in delete_arr:

@@ -6,7 +6,8 @@ from associate import associate, read_file_list
 from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
-import open3d as o3d
+
+min_votes = 10
 
 def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     rgb_im, depth_im = rgbd
@@ -40,7 +41,7 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     for match_str,votes in sorted(match_dict.items(),key=lambda x:-x[1]):
         arr = match_str.split("-")
         idx1, idx2 = int(arr[0]), int(arr[1])
-        if votes>=10 and idx1 not in s1 and idx2 not in s2:
+        if votes >= min_votes and idx1 not in s1 and idx2 not in s2:
             res[idx1] = idx2
             s1.add(idx1)
             s2.add(idx2)
@@ -53,27 +54,34 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
         des1, des2 = ref_cloud_dict[o_idx1]['des_arr'], cloud_dict[o_idx2]['des_arr']
         des1, des2 = cv2.UMat(np.array(des1,dtype=np.uint8)), cv2.UMat(np.array(des2,dtype=np.uint8))
         tmp_matches = bf.match(des1, des2)
-        kp1, kp2 = ref_cloud_dict[o_idx1]['kp_arr'], cloud_dict[o_idx2]['kp_arr']
         tmp_matches = sorted(tmp_matches, key=lambda x:x.distance)
-        num = min(50, len(tmp_matches))
+        num = len(tmp_matches)
         # im3 = cv2.drawMatches(cv2.UMat(np.array(im1)),kp1,cv2.UMat(np.array(im2)),kp2,tmp_matches[:num],outImg=None)  
         # plt.imshow(im3.get())
         # plt.savefig(str(o_idx1)+"-"+str(o_idx2)+".jpg")
         # plt.show()
         xyz_arr, uv_arr = [], []
+        K = np.array([[525.0,0.0,319.5],[0.0,525.0,239.5],[0.0,0.0,1.0]])
         for i in range(num):
             m = tmp_matches[i]
             f_idx1, f_idx2 = m.queryIdx, m.trainIdx
-            print(ref_cloud_dict[o_idx1]['xyz_arr'][f_idx1])
-            print(ref_cloud_dict[o_idx1]['uv_arr'][f_idx1])
-            print(cloud_dict[o_idx2]['uv_arr'][f_idx2])
-            xyz_arr.append(cloud_dict[o_idx2]['xyz_arr'][f_idx2])
-            uv_arr.append(cloud_dict[o_idx2]['uv_arr'][f_idx2])
+            xyz_arr.append(ref_cloud_dict[o_idx1]['xyz_arr'][f_idx1])
+            uv_arr.append(np.array(cloud_dict[o_idx2]['uv_arr'][f_idx2]))
         print('number of matches:', np.array(xyz_arr).shape[0])
         xyz_arr, uv_arr = cv2.UMat(np.array(xyz_arr,dtype=np.float32)), cv2.UMat(np.array(uv_arr,dtype=np.float32))
-        retval, rvec, tvec = cv2.solvePnP(xyz_arr,uv_arr,K,None) 
-        print("rotation:",rvec.get())
-        print("translation",tvec.get())
+        rvec, tvec = cv2.UMat(np.array([0.0,0.0,0.0])), cv2.UMat(np.array([0.0,0.0,0.0]))
+        flag, rvec, tvec, inliers = cv2.solvePnPRansac(xyz_arr,uv_arr,K,None,rvec,tvec,True)
+        # pcd1 = o3d.geometry.PointCloud()
+        # pcd1.points = o3d.utility.Vector3dVector(xyz_arr1)
+        # pcd2 = o3d.geometry.PointCloud()
+        # pcd2.points = o3d.utility.Vector3dVector(xyz_arr2) 
+        # trans_init = np.array([[1.0,0.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,0.0,0.0,1.0]])
+        # evaluation = o3d.registration.evaluate_registration(pcd1, pcd2, 0.1, trans_init)
+        # reg_p2p = o3d.registration.registration_icp(pcd1, pcd2, 0.1, trans_init, o3d.registration.TransformationEstimationPointToPoint())
+        # print(reg_p2p.transformation)
+        print('rotation:',rvec.get())
+        print('translation:',tvec.get())
+        print("number of inliers:",len(inliers.get()))
 
 
 if __name__ == "__main__":
@@ -83,6 +91,7 @@ if __name__ == "__main__":
     depth_list = read_file_list(depth_path)
     rgb_list = read_file_list(rgb_path)
     asso_list = associate(rgb_list, depth_list,offset=0.0,max_difference=0.02)
+    print(asso_list)
 
     
     rgb1 = data_dir + rgb_list[asso_list[0][0]][0]
@@ -97,5 +106,6 @@ if __name__ == "__main__":
     rgb_im2 = Image.open(rgb2)
     depth_im2 = Image.open(depth2)
     calculate_odometry(rgb_im1, rgb_im2, graph,ref_cloud_dict,ref_orb_dict,(rgb_im2,depth_im2))
+    print('ground truth:')
 
 
