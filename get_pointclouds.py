@@ -42,10 +42,10 @@ def get_clustered_point_cloud(rgb_im,depth_im):
         # img2 = cv2.rectangle(img2,(x1,y1),(x2,y2),color=(255,0,0),thickness=2)
     # plt.imshow(img2)
     # plt.savefig("overlap.jpg")
-    print("number of keypoints:",len(kp))    
-    print("scores:",scores) 
+    #print("number of keypoints:",len(kp))    
+    #print("scores:",scores) 
     
-    print("number of object:",pred_boxes.shape[0])
+    #print("number of object:",pred_boxes.shape[0])
     cloud_dict = {}
     for i in range(pred_boxes.shape[0]):
         mask = pred_masks[i]
@@ -81,10 +81,10 @@ def get_clustered_point_cloud(rgb_im,depth_im):
     delete_arr = []   
     for i in cloud_dict:
         orb_num = len(cloud_dict[i]["color_arr"])
-        print(i,orb_num)
+        #print(i,orb_num)
         if orb_num < min_orb:
             delete_arr.append(i)
-    print("delete:",delete_arr)
+    #print("delete:",delete_arr)
     for i in delete_arr:
         del cloud_dict[i]
 

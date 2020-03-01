@@ -27,7 +27,7 @@ def rotation_ransac(l):
             new_l = l-element
             inliers = np.sum(new_l**2, axis=1) < rot_threshold
             max_per = len(inliers)/len(l)
-    print('r_ransac:',res,'max percentage:',max_per)
+    #print('r_ransac:',res,'max percentage:',max_per)
     return res
 
 
@@ -45,12 +45,12 @@ def trans_ransac(l):
             new_l = l - element
             inliers = np.sum(new_l**2, axis=1) < trans_threshold
             max_per = len(inliers)/len(l)
-    print('t_ransac res:',res,'max percentage:', max_per)
+    #print('t_ransac res:',res,'max percentage:', max_per)
     return res
               
         
 
-def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
+def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     rgb_im, depth_im = rgbd
     cloud_dict,orb_dict = get_clustered_point_cloud(np.array(rgb_im),np.array(depth_im))
     graph = construct_graph(cloud_dict)
@@ -75,7 +75,7 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
             match_dict[match_str] = 1
         else:
             match_dict[match_str] += 1
-    print(match_dict)
+    #print(match_dict)
     res = {}
     s1, s2 = set(),set()
 
@@ -86,12 +86,12 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
             res[idx1] = idx2
             s1.add(idx1)
             s2.add(idx2)
-    print(res)
+    #print(res)
 
     Rs, Ts = [], []
     K = cv2.UMat(np.array([[525.0,0.0,319.5],[0.0,525.0,239.5],[0.0,0.0,1.0]],dtype=np.float32))
     for o_idx1, o_idx2 in res.items():
-        print(o_idx1, o_idx2)
+        #print(o_idx1, o_idx2)
         des1, des2 = ref_cloud_dict[o_idx1]['des_arr'], cloud_dict[o_idx2]['des_arr']
         des1, des2 = cv2.UMat(np.array(des1,dtype=np.uint8)), cv2.UMat(np.array(des2,dtype=np.uint8))
         tmp_matches = bf.match(des1, des2)
@@ -108,13 +108,13 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
             f_idx1, f_idx2 = m.queryIdx, m.trainIdx
             xyz_arr.append(ref_cloud_dict[o_idx1]['xyz_arr'][f_idx1])
             uv_arr.append(np.array(cloud_dict[o_idx2]['uv_arr'][f_idx2]))
-        print('number of matches:', np.array(xyz_arr).shape[0])
+        #print('number of matches:', np.array(xyz_arr).shape[0])
         xyz_arr, uv_arr = cv2.UMat(np.array(xyz_arr,dtype=np.float32)), cv2.UMat(np.array(uv_arr,dtype=np.float32))
         rvec, tvec = cv2.UMat(np.array([0.0,0.0,0.0])), cv2.UMat(np.array([0.0,0.0,0.0]))
         flag, rvec, tvec, inliers = cv2.solvePnPRansac(xyz_arr,uv_arr,K,None,rvec,tvec,True)
-        print('rotation:',rvec.get())
-        print('translation:',tvec.get())
-        print("number of inliers:",len(inliers.get()))
+        #print('rotation:',rvec.get())
+        #print('translation:',tvec.get())
+        #print("number of inliers:",len(inliers.get()))
         Rs.append(rvec.get())
         Ts.append(tvec.get())
     RMs = []
@@ -123,10 +123,11 @@ def calculate_odometry(im1,im2,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
         RMs.append(r.as_euler('xyz'))
     R_res = rotation_ransac(np.array(RMs))
     t_res = trans_ransac(np.array(Ts))
+    return R_res, t_res
 
 
 if __name__ == "__main__":
-    data_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg1_xyz/"
+    data_dir = "../rgbd_dataset_freiburg1_xyz/"
     depth_path = data_dir + "depth.txt"
     rgb_path = data_dir + "rgb.txt"
     depth_list = read_file_list(depth_path)
@@ -145,7 +146,8 @@ if __name__ == "__main__":
     depth2 = data_dir + depth_list[asso_list[1][1]][0]
     rgb_im2 = Image.open(rgb2)
     depth_im2 = Image.open(depth2)
-    calculate_odometry(rgb_im1, rgb_im2, graph,ref_cloud_dict,ref_orb_dict,(rgb_im2,depth_im2))
+    R, t = calculate_odometry(rgb_im1, graph,ref_cloud_dict,ref_orb_dict,(rgb_im2,depth_im2))
+    print (R,t)
     print('ground truth:')
 
 
