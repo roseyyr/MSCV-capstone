@@ -46,7 +46,7 @@ def euler_to_quaternion(eulerAngles):
 
 
 # distance between orientations : https://math.stackexchange.com/questions/90081/quaternion-distance
-def evaluate_odometry(rgbd_im1, rgbd_im2, gt1, gt2) :
+def evaluate_odometry(rgbd_im1, rgbd_im2, gt1, gt2, step) :
     rgb_im1, depth_im1 = rgbd_im1
 
     gt1_float = [float(i) for i in gt1]
@@ -61,10 +61,10 @@ def evaluate_odometry(rgbd_im1, rgbd_im2, gt1, gt2) :
 
     ref_cloud_dict, ref_orb_dict = get_clustered_point_cloud(np.array(rgb_im1),np.array(depth_im1))
     graph = construct_graph(ref_cloud_dict)
-    R_res, t_res = odo.calculate_odometry(rgb_im1, graph,ref_cloud_dict,ref_orb_dict,(rgbd_im2))
+    R_res, t_res = odo.calculate_odometry(rgb_im1, graph,ref_cloud_dict,ref_orb_dict,(rgbd_im2), step)
 
     orientation_meas = (gt1_rot_euler + R_res)
-    orirentation_meas = convertAngle(orientation_meas)
+    orientation_meas = convertAngle(orientation_meas)
     orientation_meas_quat = euler_to_quaternion(orientation_meas)
 
     trans_error = np.linalg.norm(gt1_trans + t_res - gt2_trans)
@@ -74,7 +74,8 @@ def evaluate_odometry(rgbd_im1, rgbd_im2, gt1, gt2) :
     return rot_error, trans_error
 
 if __name__ == "__main__":
-    data_dir = "../rgbd_dataset_freiburg1_xyz/"
+    data_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg3_walking_xyz/"
+    # data_dir = "../rgbd_dataset_freiburg1_xyz/"
 
     depth_path = data_dir + "depth.txt"
     rgb_path = data_dir + "rgb.txt"
@@ -106,7 +107,8 @@ if __name__ == "__main__":
 
         rgb_im2 = Image.open(rgb2)
         depth_im2 = Image.open(depth2)
-        R_error, t_error = evaluate_odometry((rgb_im1, depth_im1), (rgb_im2,depth_im2), gt1, gt2)
+        R_error, t_error = evaluate_odometry((rgb_im1, depth_im1), (rgb_im2,depth_im2), gt1, gt2, index)
+        print(R_error, t_error)
         rot_consecutive.append(R_error)
         trans_consecutive.append(t_error)
 

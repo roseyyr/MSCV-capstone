@@ -11,46 +11,52 @@ from scipy.spatial.transform import Rotation as R
 min_votes = 10
 max_iter = 100
 trans_threshold = 0.01
-rot_threshold = 0.01
+rot_threshold = 0.05
 
 def rotation_ransac(l):
     res = None
+    N = len(l)
     max_per = 0.0
     for i in range(max_iter):
         element = l[random.randint(0,len(l)-1)]
         new_l = l - element
         inliers = np.sum(new_l**2, axis=1).reshape(-1,) < rot_threshold
-        if len(inliers)/len(l) > max_per:
+        num_inliers = len(np.nonzero(inliers)[0])
+        if num_inliers / N > max_per:
             idx = np.nonzero(inliers)[0]
             element = np.mean(l[idx], axis=0)
             res = element
             new_l = l-element
             inliers = np.sum(new_l**2, axis=1) < rot_threshold
-            max_per = len(inliers)/len(l)
-    #print('r_ransac:',res,'max percentage:',max_per)
+            num_inliers = len(np.nonzero(inliers)[0])
+            max_per = num_inliers / N
+    # print('r_ransac:',res,'max percentage:',max_per)
     return res
 
 
 def trans_ransac(l):
     res = None
+    N = len(l)
     max_per = 0.0
     for i in range(max_iter):
         element = l[random.randint(0,len(l)-1)]
         new_l = l - element
         inliers = np.sum(new_l**2, axis=1).reshape(-1,) < trans_threshold
-        if len(inliers)/len(l) > max_per:
+        num_inliers = len(np.nonzero(inliers)[0])
+        if num_inliers / N > max_per:
             idx = np.nonzero(inliers)[0]
             element = np.mean(l[idx], axis=0)
             res = element 
             new_l = l - element
             inliers = np.sum(new_l**2, axis=1) < trans_threshold
-            max_per = len(inliers)/len(l)
-    #print('t_ransac res:',res,'max percentage:', max_per)
+            num_inliers = len(np.nonzero(inliers)[0])
+            max_per = num_inliers / N
+    # print('t_ransac res:',res,'max percentage:', max_per)
     return res
               
         
 
-def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
+def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd,step):
     rgb_im, depth_im = rgbd
     cloud_dict,orb_dict = get_clustered_point_cloud(np.array(rgb_im),np.array(depth_im))
     graph = construct_graph(cloud_dict)
@@ -92,14 +98,15 @@ def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     K = cv2.UMat(np.array([[525.0,0.0,319.5],[0.0,525.0,239.5],[0.0,0.0,1.0]],dtype=np.float32))
     for o_idx1, o_idx2 in res.items():
         #print(o_idx1, o_idx2)
+        kp1, kp2 =  ref_cloud_dict[o_idx1]['kp_arr'], cloud_dict[o_idx2]['kp_arr']
         des1, des2 = ref_cloud_dict[o_idx1]['des_arr'], cloud_dict[o_idx2]['des_arr']
         des1, des2 = cv2.UMat(np.array(des1,dtype=np.uint8)), cv2.UMat(np.array(des2,dtype=np.uint8))
         tmp_matches = bf.match(des1, des2)
         tmp_matches = sorted(tmp_matches, key=lambda x:x.distance)
         num = len(tmp_matches)
-        # im3 = cv2.drawMatches(cv2.UMat(np.array(im1)),kp1,cv2.UMat(np.array(im2)),kp2,tmp_matches[:num],outImg=None)  
+        # im3 = cv2.drawMatches(cv2.UMat(np.array(im1)),kp1,cv2.UMat(np.array(rgb_im)),kp2,tmp_matches[:num],outImg=None)  
         # plt.imshow(im3.get())
-        # plt.savefig(str(o_idx1)+"-"+str(o_idx2)+".jpg")
+        # plt.savefig('step_'+str(step)+'_'+str(o_idx1)+"-"+str(o_idx2)+".jpg")
         # plt.show()
         xyz_arr, uv_arr = [], []
         K = np.array([[525.0,0.0,319.5],[0.0,525.0,239.5],[0.0,0.0,1.0]])
@@ -112,8 +119,8 @@ def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
         xyz_arr, uv_arr = cv2.UMat(np.array(xyz_arr,dtype=np.float32)), cv2.UMat(np.array(uv_arr,dtype=np.float32))
         rvec, tvec = cv2.UMat(np.array([0.0,0.0,0.0])), cv2.UMat(np.array([0.0,0.0,0.0]))
         flag, rvec, tvec, inliers = cv2.solvePnPRansac(xyz_arr,uv_arr,K,None,rvec,tvec,True)
-        #print('rotation:',rvec.get())
-        #print('translation:',tvec.get())
+        # print(str(o_idx1)+"-"+str(o_idx2)+'rotation:',rvec.get())
+        # print(str(o_idx1)+"-"+str(o_idx2)+'translation:',tvec.get())
         #print("number of inliers:",len(inliers.get()))
         Rs.append(rvec.get())
         Ts.append(tvec.get())
@@ -121,8 +128,11 @@ def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd):
     for rvec in Rs:
         r = R.from_rotvec(rvec.reshape(3,))
         RMs.append(r.as_euler('xyz'))
-    R_res = rotation_ransac(np.array(RMs))
-    t_res = trans_ransac(np.array(Ts))
+    RMs = np.array(RMs).reshape(-1, 3)
+    Ts = np.array(Ts).reshape(-1, 3)
+    R_res = rotation_ransac(RMs)
+    t_res = trans_ransac(Ts)
+    # print('step:'+str(step), R_res, t_res)
     return R_res, t_res
 
 
