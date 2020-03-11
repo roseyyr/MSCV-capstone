@@ -44,38 +44,51 @@ def euler_to_quaternion(eulerAngles):
 
     return np.array([qx, qy, qz, qw])
 
+def calc_pairwise_error(gt2, R_abs, t_abs) :
+    gt2_float = [float(i) for i in gt2]
+    gt2_trans = gt2_float[0:3]
+    gt2_rot = gt2_float[3:]
+    gt2_rot_euler = quaternion_to_euler(gt2_rot)
+    print (t_abs, gt2_trans)
+    trans_error = np.linalg.norm(t_abs - gt2_trans)
+    rot_error = 1 - ((np.sum(gt2_rot * R_abs))**2)
 
-# distance between orientations : https://math.stackexchange.com/questions/90081/quaternion-distance
-def evaluate_odometry(rgbd_im1, rgbd_im2, gt1, gt2, step) :
-    rgb_im1, depth_im1 = rgbd_im1
+    return rot_error, trans_error
+
+def calc_Rot_and_Trans_world(gt1, R_rel, t_rel) :
 
     gt1_float = [float(i) for i in gt1]
     gt1_trans = gt1_float[0:3]
     gt1_rot = gt1_float[3:]
     gt1_rot_euler = quaternion_to_euler(gt1_rot)
 
-    gt2_float = [float(i) for i in gt2]
-    gt2_trans = gt2_float[0:3]
-    gt2_rot = gt2_float[3:]
-    gt2_rot_euler = quaternion_to_euler(gt2_rot)
+    orientation_meas = (gt1_rot_euler + R_rel)
+    orientation_meas = convertAngle(orientation_meas)
+    orientation_meas_quat = euler_to_quaternion(orientation_meas)
+
+    trans_abs = gt1_trans + t_rel
+
+    return orientation_meas_quat,trans_abs
+
+def calc_odometry_pairwise(rgbd_im1, rgbd_im2, step) :
+    rgb_im1, depth_im1 = rgbd_im1
 
     ref_cloud_dict, ref_orb_dict = get_clustered_point_cloud(np.array(rgb_im1),np.array(depth_im1))
     graph = construct_graph(ref_cloud_dict)
     R_res, t_res = odo.calculate_odometry(rgb_im1, graph,ref_cloud_dict,ref_orb_dict,(rgbd_im2), step)
 
-    orientation_meas = (gt1_rot_euler + R_res)
-    orientation_meas = convertAngle(orientation_meas)
-    orientation_meas_quat = euler_to_quaternion(orientation_meas)
-
-    trans_error = np.linalg.norm(gt1_trans + t_res - gt2_trans)
-    rot_error = 1 - ((np.sum(gt2_rot * orientation_meas_quat))**2)
-    #Should rot_error be abs ? Discuss and check.
-
-    return rot_error, trans_error
+    return R_res, t_res
 
 if __name__ == "__main__":
-    data_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg2_desk_with_person/"
-    # data_dir = "../rgbd_dataset_freiburg1_xyz/"
+
+
+    data_dir = sys.argv[1]
+
+    keyFrameStart = 100
+    keyFrameEnd = 125
+    keyFrameInterval = 5
+
+    measure_ate_and_rpe_error = True
 
     depth_path = data_dir + "depth.txt"
     rgb_path = data_dir + "rgb.txt"
@@ -90,55 +103,67 @@ if __name__ == "__main__":
 
     list_len = min(len(asso_list), len(asso_list2))
 
-    rot_consecutive = []
-    trans_consecutive = []
-    for index in range(900, 1200) :
-        print (index)
-        rgb1 = data_dir + rgb_list[asso_list[index][0]][0]
-        depth1 = data_dir + depth_list[asso_list[index][1]][0]
-        gt1 = gt_list[asso_list2[0][1]]
+    if measure_ate_and_rpe_error == True :
+        fileID_groundtruth = open(sys.argv[2], 'w')
+        fileID_estimatedValue = open(sys.argv[3], 'w')
+        for index in range(keyFrameStart, keyFrameEnd, keyFrameInterval) :
     
-        rgb_im1 = Image.open(rgb1)
-        depth_im1 = Image.open(depth1)
-
-        rgb2 = data_dir + rgb_list[asso_list[index+1][0]][0]
-        depth2 = data_dir + depth_list[asso_list[index+1][1]][0]
-        gt2 = gt_list[asso_list2[1][1]]
-
-        rgb_im2 = Image.open(rgb2)
-        depth_im2 = Image.open(depth2)
-        R_error, t_error = evaluate_odometry((rgb_im1, depth_im1), (rgb_im2,depth_im2), gt1, gt2, index)
-        print(R_error, t_error)
-        rot_consecutive.append(R_error)
-        trans_consecutive.append(t_error)
-
-    '''
-    rot_cum = []
-    trans_cum = []
-    R_error_cum = 0
-    t_error_cum = 0
-    for index in range(10) :
-        rgb1 = data_dir + rgb_list[asso_list[0][0]][0]
-        depth1 = data_dir + depth_list[asso_list[0][1]][0]
-        gt1 = gt_list[asso_list2[0][1]]
+            rgb_keyframe = data_dir + rgb_list[asso_list[index][0]][0]
+            depth_keyframe = data_dir + depth_list[asso_list[index][1]][0]
+            gt_keyframe = (gt_list[asso_list2[index][1]])
+            #print (gt_keyframe)
+            rgb_im_keyframe = Image.open(rgb_keyframe)
+            depth_im_keyframe = Image.open(depth_keyframe)
+            rgbd_keyframe = (rgb_im_keyframe, depth_im_keyframe)
     
-        rgb_im1 = Image.open(rgb1)
-        depth_im1 = Image.open(depth1)
+            for frame in range(index, index + keyFrameInterval) :
+                gt_currentframe = (gt_list[asso_list2[frame][1]])
+                gtList_currentframe = [str(asso_list2[frame][1])]
+                gtList_currentframe.extend(gt_currentframe)
+                for values in gtList_currentframe :
+                    fileID_groundtruth.write(values + ' ')
+                fileID_groundtruth.write('\n')
+    
+                rgb_currentframe = data_dir + rgb_list[asso_list[frame][0]][0]
+                depth_currentframe = data_dir + depth_list[asso_list[frame][1]][0]
+    
+                rgb_im_currentframe = Image.open(rgb_currentframe)
+                depth_im_currentframe = Image.open(depth_currentframe)
+                rgbd_currentframe = (rgb_im_currentframe, depth_im_currentframe)
+    
+                R_rel, t_rel = calc_odometry_pairwise(rgbd_keyframe, rgbd_currentframe, frame)
+                R_abs, t_abs = calc_Rot_and_Trans_world(gt_keyframe, R_rel, t_rel)
+                #print (R_abs_quat, t_abs)
+                estimateList_currentFrame = [str(asso_list2[frame][1])]
+                estimateList_currentFrame.extend(t_abs)
+                estimateList_currentFrame.extend(R_abs)
+                for values in estimateList_currentFrame :
+                    fileID_estimatedValue.write(str(values) + ' ')
+                fileID_estimatedValue.write('\n')
+    else :
+        rot_consecutive = []
+        trans_consecutive = []
+        for index in range(keyFrameStart, keyFrameEnd) :
+            rgb1 = data_dir + rgb_list[asso_list[index][0]][0]
+            depth1 = data_dir + depth_list[asso_list[index][1]][0]
+            gt1 = gt_list[asso_list2[index][1]]
+    
+            rgb_im1 = Image.open(rgb1)
+            depth_im1 = Image.open(depth1)
 
-        rgb2 = data_dir + rgb_list[asso_list[index][0]][0]
-        depth2 = data_dir + depth_list[asso_list[index][1]][0]
-        gt2 = gt_list[asso_list2[1][1]]
+            rgb2 = data_dir + rgb_list[asso_list[index+1][0]][0]
+            depth2 = data_dir + depth_list[asso_list[index+1][1]][0]
+            gt2 = gt_list[asso_list2[index+1][1]]
 
-        rgb_im2 = Image.open(rgb2)
-        depth_im2 = Image.open(depth2)
-        R_error, t_error = evaluate_odometry((rgb_im1, depth_im1), (rgb_im2,depth_im2), gt1, gt2)
-        R_error_cum += R_error
-        t_error_cum += t_error 
-        rot_cum.append(R_error_cum)
-        trans_cum.append(t_error_cum)
-    '''
+            rgb_im2 = Image.open(rgb2)
+            depth_im2 = Image.open(depth2)
+            R_rel, t_rel = calc_odometry_pairwise((rgb_im1, depth_im1), (rgb_im2,depth_im2), index)
+            R_abs, t_abs = calc_Rot_and_Trans_world(gt1, R_rel, t_rel)
 
-    plt.plot(rot_consecutive, color = 'r', label='Rotation')
-    plt.plot(trans_consecutive, color = 'g', label='Translation')
-    plt.show()
-
+            R_error, t_error = calc_pairwise_error(gt2, R_abs, t_abs)
+            #print(R_error, t_error)
+            rot_consecutive.append(R_error)
+            trans_consecutive.append(t_error)
+        plt.plot(rot_consecutive, color = 'r', label='Rotation')
+        plt.plot(trans_consecutive, color = 'g', label='Translation')
+        plt.show()
