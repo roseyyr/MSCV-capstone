@@ -14,10 +14,14 @@ trans_threshold = 0.01
 rot_threshold = 0.05
 
 def rotation_ransac(l):
-    res = None
-    N = len(l)
+    res = np.array([0.,0.,0.])
+    N = len(l)  
+    if N == 0:
+        print('No object matching found')
+        return res
+
     max_per = 0.0
-    for i in range(max_iter):
+    for i in range(max_iter):         
         element = l[random.randint(0,len(l)-1)]
         new_l = l - element
         inliers = np.sum(new_l**2, axis=1).reshape(-1,) < rot_threshold
@@ -35,8 +39,12 @@ def rotation_ransac(l):
 
 
 def trans_ransac(l):
-    res = None
+    res = np.array([0.,0.,0.])
     N = len(l)
+    if N == 0:
+        print('No object matching found')
+        return res
+
     max_per = 0.0
     for i in range(max_iter):
         element = l[random.randint(0,len(l)-1)]
@@ -81,7 +89,7 @@ def calculate_odometry(im1,ref_graph,ref_cloud_dict,ref_orb_dict,rgbd,step):
             match_dict[match_str] = 1
         else:
             match_dict[match_str] += 1
-    #print(match_dict)
+    # print(match_dict)
     res = {}
     s1, s2 = set(),set()
 

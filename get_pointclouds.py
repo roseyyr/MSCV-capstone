@@ -33,7 +33,7 @@ def construct_graph(cloud_dict):
 
 def get_clustered_point_cloud(rgb_im,depth_im):
     H, W, _ = rgb_im.shape
-    pred_boxes, pred_classes, scores, pred_masks = get_segres(np.array(rgb_im))
+    panoptic_seg, seg_info = get_segres(np.array(rgb_im))
     kp, des = extract_orb(rgb_im)
     # img2 = cv2.drawKeypoints(rgb_im,kp,outImage=None,color=(0,255,0), flags=0)
     # for i in range(pred_boxes.tensor.size()[0]):
@@ -47,36 +47,34 @@ def get_clustered_point_cloud(rgb_im,depth_im):
     
     #print("number of object:",pred_boxes.shape[0])
     cloud_dict = {}
-    for i in range(pred_boxes.shape[0]):
-        mask = pred_masks[i]
-        cluster_dict = {"score":scores[i].item(), "pred_class":pred_classes[i].item(),"pred_box":pred_boxes[i],\
+    N = len(seg_info)
+    # print(seg_info)
+    # print(panoptic_seg)
+    for i in range(N):
+        cluster_dict = {"pred_class":seg_info[i]['category_id'], \
                         "color_arr":[], "xyz_arr":[],"des_arr":[],"uv_arr":[],"kp_arr":[]}
-        cloud_dict[i] = cluster_dict
+        if seg_info[i]['isthing']:
+            cluster_dict['score'] = seg_info[i]['score']
+        cloud_dict[i+1] = cluster_dict
 
     assign = [-1 for i in range(len(kp))]
     for i in range(len(kp)):
         v, u = int(kp[i].pt[0]), int(kp[i].pt[1])
-        label = None
-        for j in range(len(pred_masks)):
-            if pred_masks[j,u,v] == True:
-                label = j
-                break
- 
-        if label == None:
-            continue
-        color = rgb_im[u,v]
-        Z = depth_im[u,v] / scalingFactor
-        if Z==0: 
-            continue
-        X = (u - centerX) * Z / focalLength
-        Y = (v - centerY) * Z / focalLength
+        label = panoptic_seg[u, v]
+        if 1 <= label <= N:
+            color = rgb_im[u,v]
+            Z = depth_im[u,v] / scalingFactor
+            if Z==0: 
+                continue
+            X = (u - centerX) * Z / focalLength
+            Y = (v - centerY) * Z / focalLength
        
-        cloud_dict[label]["color_arr"].append([color[0],color[1],color[2]])
-        cloud_dict[label]["xyz_arr"].append([X,Y,Z])
-        cloud_dict[label]["des_arr"].append(des[i])
-        cloud_dict[label]["uv_arr"].append([u,v])
-        cloud_dict[label]["kp_arr"].append(kp[i])
-        assign[i] = label
+            cloud_dict[label]["color_arr"].append([color[0],color[1],color[2]])
+            cloud_dict[label]["xyz_arr"].append([X,Y,Z])
+            cloud_dict[label]["des_arr"].append(des[i])
+            cloud_dict[label]["uv_arr"].append([u,v])
+            cloud_dict[label]["kp_arr"].append(kp[i])
+            assign[i] = label
 
     delete_arr = []   
     for i in cloud_dict:

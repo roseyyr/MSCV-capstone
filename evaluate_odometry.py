@@ -74,7 +74,7 @@ def evaluate_odometry(rgbd_im1, rgbd_im2, gt1, gt2, step) :
     return rot_error, trans_error
 
 if __name__ == "__main__":
-    data_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg3_walking_xyz/"
+    data_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg2_desk_with_person/"
     # data_dir = "../rgbd_dataset_freiburg1_xyz/"
 
     depth_path = data_dir + "depth.txt"
@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
     rot_consecutive = []
     trans_consecutive = []
-    for index in range(list_len - 1) :
+    for index in range(900, 1200) :
         print (index)
         rgb1 = data_dir + rgb_list[asso_list[index][0]][0]
         depth1 = data_dir + depth_list[asso_list[index][1]][0]
