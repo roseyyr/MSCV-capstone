@@ -84,8 +84,8 @@ if __name__ == "__main__":
 
     data_dir = sys.argv[1]
 
-    keyFrameStart = 100
-    keyFrameEnd = 125
+    keyFrameStart = 0
+    keyFrameEnd = 1000
     keyFrameInterval = 5
 
     measure_ate_and_rpe_error = True

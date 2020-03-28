@@ -14,7 +14,7 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog
 import matplotlib.pyplot as plt
-
+from os import listdir
 cfg = get_cfg()
 # cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
 # cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
@@ -38,5 +38,29 @@ def get_segres(img):
     return panoptic_seg.cpu().numpy(), seg_info
 
 if __name__ == "__main__":
-    im = cv2.imread("./input.jpg")
-    res = get_segres(im)
+    input_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg3_walking_xyz/rgb/"
+    output_dir = "/data/datasets/yurouy/rgbd_dataset_freiburg3_walking_xyz/segment/"
+
+    im_list = listdir(input_dir)
+    H = 480
+    W = 640
+    for i in range(len(im_list)):
+        print(i)
+        im = cv2.imread(input_dir+im_list[i])
+        res, seg_info = get_segres(im)
+        output_path = output_dir + im_list[i][:-4] + ".msk"
+        with open(output_path, "w") as f:
+            for i in range(H):
+                f.write(" ".join(map(str, res[i])) + "\n")
+            f.write("instances:%d" % len(seg_info) + "\n")
+            for i in range(len(seg_info)):
+                seg_id = seg_info[i]['id']
+                isthing = seg_info[i]['isthing']
+                category = seg_info[i]['category_id']
+                if isthing:
+                    score = seg_info[i]['score']
+                    arr = [seg_id, isthing, category, score]
+                else:
+                    arr = [seg_id, isthing, category]
+                f.write(" ".join(map(str, arr)) + "\n")
+        
